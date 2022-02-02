@@ -1,0 +1,43 @@
+#!/bin/sh
+# Note: Use of "local" keyword is not strictly POSIX-compliant
+# See: https://stackoverflow.com/a/18600920/5958455
+
+# Load system-wide settings
+DEFAULT_FILE=/etc/default/sepaman
+test -r "$DEFAULT_FILE" && . "$DEFAULT_FILE"
+
+# Check for necessary privileges, notably iproute2 privileges
+HAS_PRIVILEGES=""
+has_privileges() {
+  if [ -z "$HAS_PRIVILEGES" ]; then
+    ip route replace local 127.0.0.1 dev lo proto kernel scope host table local
+    test "$#" -eq 0
+    HAS_PRIVILEGES="$?"
+  fi
+  return "$HAS_PRIVILEGES"
+}
+
+run_ifupdown() {
+  if test -z "$IF_SEPA_TYPE"; then
+    # Not a SepaMan-configured interface
+    return 0
+  fi
+  CMD="configure_${IF_SEPA_TYPE}"
+  if ! command -v "$CMD" >/dev/null; then
+    printf "Unsupported SEPA_TYPE: %s\n" "$IF_SEPA_TYPE" >&2
+    return 1
+  fi
+  "$CMD"
+}
+
+run_main() {
+  printf "Running as a standalone program is not supported." >&2
+  return 1
+}
+
+# ifupdown provides us with many environment variables
+if test -n "$IFACE" -a -n "$MODE" -a -n "$PHASE"; then
+  run_ifupdown
+else
+  run_main
+fi
