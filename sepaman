@@ -6,6 +6,13 @@
 DEFAULT_FILE=/etc/default/sepaman
 test -r "$DEFAULT_FILE" && . "$DEFAULT_FILE"
 
+# Set default values
+: ${SEPA_FROMADDR_PRIORITY:=3} \
+  ${SEPA_OIF_PRIORITY:=3} \
+  ${SEPA_FWMARK_PRIORITY:=4} \
+  ${SEPA_FWMARK_MASK:=0xFFFFFFFF} \
+  ${SEPA_FWMARK_CHAIN:=none}
+
 # Check for necessary privileges, notably iproute2 privileges
 HAS_PRIVILEGES=""
 has_privileges() {
@@ -18,11 +25,17 @@ has_privileges() {
 }
 
 run_ifupdown() {
+  case "$PHASE" in
+    pre-up|post-up|pre-down|post-down);;
+    *)
+      printf "Invalid phase %s\n" "$PHASE" >&2
+      return 1;;
+  esac
   if test -z "$IF_SEPA_TYPE"; then
     # Not a SepaMan-configured interface
     return 0
   fi
-  CMD="configure_${IF_SEPA_TYPE}"
+  CMD="sm_conf_${IF_SEPA_TYPE}"
   if ! command -v "$CMD" >/dev/null; then
     printf "Unsupported SEPA_TYPE: %s\n" "$IF_SEPA_TYPE" >&2
     return 1
@@ -31,8 +44,57 @@ run_ifupdown() {
 }
 
 run_main() {
-  printf "Running as a standalone program is not supported." >&2
+  printf "Running as a standalone program is not supported.\n" >&2
   return 1
+}
+
+sm_ifupdown_common() {
+  local TABLE="$IFACE"
+  local FWMARK="$IF_SEPA_FWMARK"
+  local FWMARK_MASK="${IF_SEPA_FWMARK_MASK:-$SEPA_FWMARK_MASK}"
+  local FWMARK_PRIO="$SEPA_FWMARK_PRIORITY"
+  local FWMARK_CHAIN="$SEPA_FWMARK_CHAIN"
+  local FAMILY="-4"
+
+  test "$ADDRFAM" = "inet6" && FAMILY="-6"
+  case "$PHASE" in
+    post-up)
+      ROUTE_ACTION=replace
+      RULE_ACTION=add
+      ;;
+    pre-down)
+      ROUTE_ACTION=delete
+      RULE_ACTION=delete
+      ;;
+  esac
+
+  ip route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
+  ip rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$SEPA_FROMADDR_PRIORITY"
+  ip rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$SEPA_OIF_PRIORITY"
+  test -n "$FWMARK" &&
+    ip rule "$RULE_ACTION" from all fwmark "$FWMARK"/"$FWMARK_MASK" table "$TABLE" pref "$FWMARK_PRIO"
+}
+
+sm_conf_gre() {
+  # Configure a GRE tunnel
+  case "$PHASE" in
+    pre-up)
+      set -- mode gre local "$IF_SEPA_LOCAL" remote "$IF_SEPA_REMOTE";;
+      test -n "$SEPA_GRE_KEY" && set -- key "$SEPA_GRE_KEY"
+      set -- ttl "${SEPA_GRE_KEY:-255}"
+      ip tunnel add "$IFACE" "$@"
+    post-down)
+      ip tunnel delete "$IFACE";;
+  esac
+  sm_ifupdown_common
+}
+
+sm_conf_common() {
+  case "$PHASE" in
+    post-down)
+      ip link delete "$IFACE";;
+  esac
+  sm_ifupdown_common
 }
 
 # ifupdown provides us with many environment variables

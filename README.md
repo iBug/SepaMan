@@ -33,7 +33,7 @@ SEPA_FWMARK_MASK=0xFFFFFFFF
 # An empty string or the special value "none" (without quotes) disables this feature.
 # Note that it is not possible to use a chain named "none"
 # Example: iptables -t mangle -A "$SEPA_FWMARK_CHAIN" -i "$IFACE" -j MARK --set-xmark "$SEPA_FWMARK/$SEPA_FWMARK_MASK"
-SEPA_FWMARK_CHAIN=PREROUTING
+SEPA_FWMARK_CHAIN=none
 ```
 
 ## Usage
@@ -47,7 +47,7 @@ iface Example inet static
 
     # Interface type. Used in `ip tunnel add` or `ip link add`
     # The whole interface is ignored by SepaMan if this option is missing.
-    sepa-type # required, "gre" or "wg"
+    sepa-type # required, "gre", "wg" or "common"
 
     # Routing table. Creates routing rules for this table.
     # Used in `ip route add table` and `ip rule add table`
@@ -67,7 +67,7 @@ iface Example inet static
     sepa-local 192.0.2.2
     sepa-remote 192.0.2.3
     sepa-gre-key # optional, "unkeyed GRE" is used when omitted
-    sepa-gre-ttl # optional
+    sepa-gre-ttl # optional, defaults to 255
 
     ##################################
     # WireGuard-specific configuration
