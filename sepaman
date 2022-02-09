@@ -28,7 +28,7 @@ run_ifupdown() {
   case "$PHASE" in
     pre-up|post-up|pre-down|post-down);;
     *)
-      printf "Invalid phase %s\n" "$PHASE" >&2
+      printf "Internal error: Received invalid phase \"%s\"\n" "$PHASE" >&2
       return 1;;
   esac
   if test -z "$IF_SEPA_TYPE"; then
@@ -53,46 +53,89 @@ sm_ifupdown_common() {
   local FWMARK="$IF_SEPA_FWMARK"
   local FWMARK_MASK="${IF_SEPA_FWMARK_MASK:-$SEPA_FWMARK_MASK}"
   local FWMARK_PRIO="$SEPA_FWMARK_PRIORITY"
-  local FWMARK_CHAIN="$SEPA_FWMARK_CHAIN"
+  local FWMARK_CHAIN="${IF_SEPA_FWMARK_CHAIN:-$SEPA_FWMARK_CHAIN}"
   local FAMILY="-4"
 
   test "$ADDRFAM" = "inet6" && FAMILY="-6"
+  local ROUTE_ACTION RULE_ACTION XFRM_ACTION IPT_ACTION
   case "$PHASE" in
     post-up)
       ROUTE_ACTION=replace
       RULE_ACTION=add
+      XFRM_ACTION=add
+      IPT_ACTION="-A"
       ;;
     pre-down)
       ROUTE_ACTION=delete
       RULE_ACTION=delete
+      XFRM_ACTION=delete
+      IPT_ACTION="-D"
+      ;;
+    *)
+      # Not interested in this phase
+      return 0
       ;;
   esac
 
-  ip route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
-  ip rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$SEPA_FROMADDR_PRIORITY"
-  ip rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$SEPA_OIF_PRIORITY"
-  test -n "$FWMARK" &&
-    ip rule "$RULE_ACTION" from all fwmark "$FWMARK"/"$FWMARK_MASK" table "$TABLE" pref "$FWMARK_PRIO"
-}
+  ip "$FAMILY" route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
+  ip "$FAMILY" rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$SEPA_FROMADDR_PRIORITY"
+  ip "$FAMILY" rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$SEPA_OIF_PRIORITY"
+  if test -n "$FWMARK"; then
+    ip "$FAMILY" rule "$RULE_ACTION" from all fwmark "$FWMARK"/"$FWMARK_MASK" table "$TABLE" pref "$FWMARK_PRIO"
 
-sm_conf_gre() {
-  # Configure a GRE tunnel
-  case "$PHASE" in
-    pre-up)
-      set -- mode gre local "$IF_SEPA_LOCAL" remote "$IF_SEPA_REMOTE";;
-      test -n "$SEPA_GRE_KEY" && set -- key "$SEPA_GRE_KEY"
-      set -- ttl "${SEPA_GRE_KEY:-255}"
-      ip tunnel add "$IFACE" "$@"
-    post-down)
-      ip tunnel delete "$IFACE";;
-  esac
-  sm_ifupdown_common
+    if test -n "$FWMARK_CHAIN" -a "$FWMARK_CHAIN" != none; then
+      local IPTABLES="iptables"
+      test "$ADDRFAM" = "inet6" && IPTABLES="ip6tables"
+      "$IPTABLES" -t mangle "$IPT_ACTION" "$SEPA_FWMARK_CHAIN" -i "$IFACE" -j MARK --set-xmark "$SEPA_FWMARK/$SEPA_FWMARK_MASK"
+    fi
+  fi
+
+  if test -n "$IF_SEPA_IPSEC_LOCAL" -a -n "$IF_SEPA_IPSEC_REMOTE"; then
+    local KEYDIR="$SEPA_IPSEC_KEY_DIR" KEYFILE
+    if test -e "$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"; then
+      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"
+    elif test -e "$KEYDIR/${IF_SEPA_IPSEC_REMOTE}-${IF_SEPA_IPSEC_LOCAL}"; then
+      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_REMOTE}-${IF_SEPA_IPSEC_LOCAL}"
+    elif "$SEPA_IPSEC_KEY_CREATE" = true; then
+      printf "Creating key file for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
+      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"
+      local RAND_FILE=/dev/urandom
+      printf "ID=%s\n" "$(head -c 8 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
+      printf "KEY1=%s\n" "$(head -c 64 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
+      printf "KEY2=%s\n" "$(head -c 64 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
+    else
+      printf "No key file found for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
+      return 1
+    fi
+
+    if test "$XFRM_ACTION" = add; then (
+      . "$KEYFILE"
+      local SRC="$IF_SEPA_IPSEC_LOCAL" DST="$IF_SEPA_IPSEC_REMOTE"
+
+      ip xfrm policy add src "$SRC" dst "$DST" dir out tmpl src "$SRC" dst "$DST" proto esp reqid "$ID" mode transport
+      ip xfrm policy add src "$DST" dst "$SRC" dir in tmpl src "$DST" dst "$SRC" proto esp reqid "$ID" mode transport
+      ip xfrm state add src "$SRC" dst "$DST" proto esp spi "$ID" reqid "$ID" mode transport auth sha256 "$KEY1" enc aes "$KEY2"
+      ip xfrm state add src "$DST" dst "$SRC" proto esp spi "$ID" reqid "$ID" mode transport auth sha256 "$KEY1" enc aes "$KEY2"
+    ) elif test "$XFRM_ACTION" = delete; then (
+      . "$KEYFILE"
+      local SRC="$IF_SEPA_IPSEC_LOCAL" DST="$IF_SEPA_IPSEC_REMOTE"
+
+      ip xfrm policy delete src "$SRC" dst "$DST" dir out
+      ip xfrm policy delete src "$DST" dst "$SRC" dir in
+      ip xfrm state delete src "$SRC" dst "$DST" proto esp spi "$ID"
+      ip xfrm state delete src "$DST" dst "$SRC" proto esp spi "$ID"
+    ) else
+      printf "Internal error: Invalid XFRM action %s.\n" "$XFRM_ACTION" >&2
+      return 1
+    fi
+  fi
+  return 0
 }
 
 sm_conf_common() {
   case "$PHASE" in
     post-down)
-      ip link delete "$IFACE";;
+      ip link delete "$IFACE" 2>/dev/null;;
   esac
   sm_ifupdown_common
 }

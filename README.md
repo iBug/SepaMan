@@ -34,6 +34,12 @@ SEPA_FWMARK_MASK=0xFFFFFFFF
 # Note that it is not possible to use a chain named "none"
 # Example: iptables -t mangle -A "$SEPA_FWMARK_CHAIN" -i "$IFACE" -j MARK --set-xmark "$SEPA_FWMARK/$SEPA_FWMARK_MASK"
 SEPA_FWMARK_CHAIN=none
+
+# Load IP XFRM policies and states using SPI ID and keys from this directory
+SEPA_IPSEC_KEY_DIR=/etc/ipsec/keys.d
+
+# Create key files if they don't exist
+SEPA_IPSEC_KEY_CREATE=true
 ```
 
 ## Usage
@@ -47,7 +53,7 @@ iface Example inet static
 
     # Interface type. Used in `ip tunnel add` or `ip link add`
     # The whole interface is ignored by SepaMan if this option is missing.
-    sepa-type # required, "gre", "wg" or "common"
+    sepa-type common # required, only "common" is supported at present
 
     # Routing table. Creates routing rules for this table.
     # Used in `ip route add table` and `ip rule add table`
@@ -62,24 +68,10 @@ iface Example inet static
     # iptables chain for firewall mark
     sepa-fwmark-chain # overrides the system-wide setting. Special value "none" is accepted
 
-    ############################
-    # GRE-specific configuration
-    sepa-local 192.0.2.2
-    sepa-remote 192.0.2.3
-    sepa-gre-key # optional, "unkeyed GRE" is used when omitted
-    sepa-gre-ttl # optional, defaults to 255
-
-    ##################################
-    # WireGuard-specific configuration
-    # Does not yet support multiple peers for the same interface
-    sepa-wg-port # optional, listen-port for WireGuard
-    sepa-wg-fwmark # optional, as in `wg set fwmark`
-    sepa-wg-private-key /etc/wireguard/example.key
-    sepa-wg-peer # required, base64-encoded public key of the peer
-    sepa-wg-preshared-key # optional
-    sepa-wg-endpoint # optional
-    sepa-wg-persistent-keepalive # optional
-    #sepa-wg-allowed-ips # NOT IMPLEMENTED, 0.0.0.0/0 and ::/0 are used
+    # Load IPsec Security Policies and Associations
+    # IPsec is skipped if either of these keys are omitted
+    sepa-ipsec-local 192.0.2.1
+    sepa-ipsec-remote 192.0.2.2
 ```
 
 ## License
