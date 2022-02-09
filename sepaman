@@ -100,9 +100,9 @@ sm_ifupdown_common() {
       printf "Creating key file for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
       KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"
       local RAND_FILE=/dev/urandom
-      printf "ID=%s\n" "$(head -c 8 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
-      printf "KEY1=%s\n" "$(head -c 64 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
-      printf "KEY2=%s\n" "$(head -c 64 "$RAND_FILE" | xxd -ps)" > "$KEYFILE"
+      printf "ID=0x%s\n" "$(head -c 4 "$RAND_FILE" | xxd -ps -c 8)" > "$KEYFILE"
+      printf "KEY1=0x%s\n" "$(head -c 32 "$RAND_FILE" | xxd -ps -c 64)" >> "$KEYFILE"
+      printf "KEY2=0x%s\n" "$(head -c 32 "$RAND_FILE" | xxd -ps -c 64)" >> "$KEYFILE"
     else
       printf "No key file found for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
       return 1
