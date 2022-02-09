@@ -12,7 +12,7 @@ ln -s "$SEPAMAN" /etc/network/if-down.d/
 ln -s "$SEPAMAN" /etc/network/if-post-down.d/
 ```
 
-Then create `/etc/default/sepaman` and set the value according to your needs. The following example values are used as defaults if omitted.
+Then create `/etc/default/sepaman` and set the value according to your needs. The following example values are reasonable defaults if you want to start with. **Note that all settings must be present.**
 
 ```shell
 # System-wide SepaMan settings
