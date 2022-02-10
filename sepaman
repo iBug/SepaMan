@@ -50,9 +50,11 @@ run_main() {
 
 sm_ifupdown_common() {
   local TABLE="$IFACE"
+  local FROMADDR_PRIO="${IF_SEPA_FROMADDR_PRIO:-$SEPA_FROMADDR_PRIORITY}"
+  local OIF_PRIO="${IF_SEPA_OIF_PRIO:-$SEPA_OIF_PRIORITY}"
   local FWMARK="$IF_SEPA_FWMARK"
   local FWMARK_MASK="${IF_SEPA_FWMARK_MASK:-$SEPA_FWMARK_MASK}"
-  local FWMARK_PRIO="$SEPA_FWMARK_PRIORITY"
+  local FWMARK_PRIO="${IF_SEPA_FWMARK_PRIO:-$SEPA_FWMARK_PRIORITY}"
   local FWMARK_CHAIN="${IF_SEPA_FWMARK_CHAIN:-$SEPA_FWMARK_CHAIN}"
   local FAMILY="-4"
 
@@ -78,8 +80,8 @@ sm_ifupdown_common() {
   esac
 
   ip "$FAMILY" route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
-  ip "$FAMILY" rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$SEPA_FROMADDR_PRIORITY"
-  ip "$FAMILY" rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$SEPA_OIF_PRIORITY"
+  ip "$FAMILY" rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$FROMADDR_PRIO"
+  ip "$FAMILY" rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$OIF_PRIO"
   if test -n "$FWMARK"; then
     ip "$FAMILY" rule "$RULE_ACTION" from all fwmark "$FWMARK"/"$FWMARK_MASK" table "$TABLE" pref "$FWMARK_PRIO"
 

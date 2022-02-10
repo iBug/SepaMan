@@ -68,6 +68,12 @@ iface Example inet static
     # iptables chain for firewall mark
     sepa-fwmark-chain # overrides the system-wide setting. Special value "none" is accepted
 
+    # Override default routing rule priorities from /etc/default/sepaman.
+    # All keys are optional (since there are default values)
+    sepa-fromaddr-prio
+    sepa-oif-prio
+    sepa-fwmark-prio
+
     # Load IPsec Security Policies and Associations
     # IPsec is skipped if either of these keys are omitted
     sepa-ipsec-local 192.0.2.1
