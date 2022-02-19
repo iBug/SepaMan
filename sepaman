@@ -56,6 +56,20 @@ cmd_version() {
   echo "SepaMan $VERSION"
 }
 
+cmd_install() {
+  local BASE=/etc/network
+  local F="$BASE/interfaces"
+  if [ ! -e "$F" ]; then
+    printf "%s not found. Refusing to work without Debian ifupdown.\n" "$F" >&2
+    exit 1
+  fi
+  local D
+  for D in if-pre-up.d if-up.d if-down.d if-post-down.d; do
+    mkdir -p "$BASE/$D"
+    ln -s "$(realpath "$0")" "$BASE/$D/"
+  done
+}
+
 run_main() {
   if [ $# -eq 0 ]; then
     echo "This tool is intended to be called by ifupdown."
