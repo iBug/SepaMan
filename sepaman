@@ -14,7 +14,11 @@ test -r "$DEFAULT_FILE" && . "$DEFAULT_FILE"
   ${SEPA_FWMARK_CHAIN:=none}
 
 # Set metadata
-VERSION="0.1"
+C_FILENAME=sepaman
+C_VERSION="0.1"
+C_HOMEPAGE="https://github.com/iBug/SepaMan"
+C_UPDATE_URL="$C_HOMEPAGE/raw/master/$C_FILENAME"
+C_EXE="$(realpath "$0")"
 
 # Check for necessary privileges, notably iproute2 privileges
 HAS_PRIVILEGES=""
@@ -66,8 +70,12 @@ cmd_install() {
   local D
   for D in if-pre-up.d if-up.d if-down.d if-post-down.d; do
     mkdir -p "$BASE/$D"
-    ln -s "$(realpath "$0")" "$BASE/$D/"
+    ln -sfn "$C_EXE" "$BASE/$D/$C_FILENAME"
   done
+}
+
+cmd_update() {
+  exec curl -fsSLo "$C_EXE" "$C_UPDATE_URL"
 }
 
 run_main() {
