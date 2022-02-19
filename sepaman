@@ -13,6 +13,9 @@ test -r "$DEFAULT_FILE" && . "$DEFAULT_FILE"
   ${SEPA_FWMARK_MASK:=0xFFFFFFFF} \
   ${SEPA_FWMARK_CHAIN:=none}
 
+# Set metadata
+VERSION="0.1"
+
 # Check for necessary privileges, notably iproute2 privileges
 HAS_PRIVILEGES=""
 has_privileges() {
@@ -43,9 +46,33 @@ run_ifupdown() {
   "$CMD"
 }
 
+cmd_help() {
+  echo "Usage: $0 [command]"
+  echo "See project homepage for help."
+  exit 1
+}
+
+cmd_version() {
+  echo "SepaMan $VERSION"
+}
+
 run_main() {
-  printf "Running as a standalone program is not supported.\n" >&2
-  return 1
+  if [ $# -eq 0 ]; then
+    echo "This tool is intended to be called by ifupdown."
+    exit 1
+  fi
+  case "$1" in
+    --help) cmd_help;;
+    --version) cmd_version;;
+    *)
+      CMD="cmd_$1"
+      if ! command -v "$CMD" >/dev/null; then
+        printf "Unknown command %s\n" "$1" >&2
+        return 1
+      fi
+      shift
+      "$CMD" "$@"
+  esac
 }
 
 sm_ifupdown_common() {
@@ -146,5 +173,5 @@ sm_conf_common() {
 if test -n "$IFACE" -a -n "$MODE" -a -n "$PHASE"; then
   run_ifupdown
 else
-  run_main
+  run_main "$@"
 fi
