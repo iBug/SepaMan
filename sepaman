@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Note: Use of "local" keyword is not strictly POSIX-compliant
 # See: https://stackoverflow.com/a/18600920/5958455
 
@@ -141,27 +141,41 @@ sm_ifupdown_common() {
     fi
   fi
 
+  local IPSEC_LOCAL IPSEC_REMOTE
   if test -n "$IF_SEPA_IPSEC_LOCAL" -a -n "$IF_SEPA_IPSEC_REMOTE"; then
+    IPSEC_LOCAL="$IF_SEPA_IPSEC_LOCAL"
+    IPSEC_REMOTE="$IF_SEPA_IPSEC_REMOTE"
+  elif test -n "$IF_SEPA_IPSEC_AUTO"; then
+    local JSON="$(ip -h tunnel show "$IFACE" | jq .[])"
+    if test -z "$JSON"; then
+      printf "Error: %s is not a tunnel interface.\n" "$IFACE" >&2
+      return 1
+    fi
+    IPSEC_LOCAL="$(jq -r .local <<< "$JSON")"
+    IPSEC_REMOTE="$(jq -r .remote <<< "$JSON")"
+  fi
+
+  if test -n "$IPSEC_LOCAL" -a -n "$IPSEC_REMOTE"; then
     local KEYDIR="$SEPA_IPSEC_KEY_DIR" KEYFILE
-    if test -e "$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"; then
-      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"
-    elif test -e "$KEYDIR/${IF_SEPA_IPSEC_REMOTE}-${IF_SEPA_IPSEC_LOCAL}"; then
-      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_REMOTE}-${IF_SEPA_IPSEC_LOCAL}"
+    if test -e "$KEYDIR/${IPSEC_LOCAL}-${IPSEC_REMOTE}"; then
+      KEYFILE="$KEYDIR/${IPSEC_LOCAL}-${IPSEC_REMOTE}"
+    elif test -e "$KEYDIR/${IPSEC_REMOTE}-${IPSEC_LOCAL}"; then
+      KEYFILE="$KEYDIR/${IPSEC_REMOTE}-${IPSEC_LOCAL}"
     elif "$SEPA_IPSEC_KEY_CREATE" = true; then
-      printf "Creating key file for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
-      KEYFILE="$KEYDIR/${IF_SEPA_IPSEC_LOCAL}-${IF_SEPA_IPSEC_REMOTE}"
+      printf "Creating key file for %s-%s\n" "$IPSEC_LOCAL" "$IPSEC_REMOTE" >&2
+      KEYFILE="$KEYDIR/${IPSEC_LOCAL}-${IPSEC_REMOTE}"
       local RAND_FILE=/dev/urandom
       printf "ID=0x%s\n" "$(head -c 4 "$RAND_FILE" | xxd -ps -c 8)" > "$KEYFILE"
       printf "KEY1=0x%s\n" "$(head -c 32 "$RAND_FILE" | xxd -ps -c 64)" >> "$KEYFILE"
       printf "KEY2=0x%s\n" "$(head -c 32 "$RAND_FILE" | xxd -ps -c 64)" >> "$KEYFILE"
     else
-      printf "No key file found for %s-%s\n" "$IF_SEPA_IPSEC_LOCAL" "$IF_SEPA_IPSEC_REMOTE" >&2
+      printf "No key file found for %s-%s\n" "$IPSEC_LOCAL" "$IPSEC_REMOTE" >&2
       return 1
     fi
 
     if test "$XFRM_ACTION" = add; then (
       . "$KEYFILE"
-      local SRC="$IF_SEPA_IPSEC_LOCAL" DST="$IF_SEPA_IPSEC_REMOTE"
+      local SRC="$IPSEC_LOCAL" DST="$IPSEC_REMOTE"
 
       ip xfrm policy add src "$SRC" dst "$DST" dir out tmpl src "$SRC" dst "$DST" proto esp reqid "$ID" mode transport
       ip xfrm policy add src "$DST" dst "$SRC" dir in tmpl src "$DST" dst "$SRC" proto esp reqid "$ID" mode transport
@@ -169,7 +183,7 @@ sm_ifupdown_common() {
       ip xfrm state add src "$DST" dst "$SRC" proto esp spi "$ID" reqid "$ID" mode transport auth sha256 "$KEY1" enc aes "$KEY2"
     ) elif test "$XFRM_ACTION" = delete; then (
       . "$KEYFILE"
-      local SRC="$IF_SEPA_IPSEC_LOCAL" DST="$IF_SEPA_IPSEC_REMOTE"
+      local SRC="$IPSEC_LOCAL" DST="$IPSEC_REMOTE"
 
       ip xfrm policy delete src "$SRC" dst "$DST" dir out
       ip xfrm policy delete src "$DST" dst "$SRC" dir in

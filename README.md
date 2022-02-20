@@ -60,7 +60,7 @@ iface Example inet static
     # It's recommended to omit this option and use the default value,
     #   and edit /etc/iproute2/rt_tables instead.
     sepa-table # optional, defaults to `$IFACE`
-    
+
     # Firewall Mark. Creates fwmark-based routing rules and "mangle" iptables rules
     sepa-fwmark # optional, no rules are created if omitted
     sepa-fwmark-mask # optional, overrides the system-wide setting
@@ -75,9 +75,14 @@ iface Example inet static
     sepa-fwmark-prio
 
     # Load IPsec Security Policies and Associations
-    # IPsec is skipped if either of these keys are omitted
+    # IPsec is optional and is applied only when sufficient parameters have been given
+
+    # You can either:
+    # 1. Use explicit source and destination addresses
     sepa-ipsec-local 192.0.2.1
     sepa-ipsec-remote 192.0.2.2
+    # 2. Or, use addresses from the tunnel interface
+    sepa-ipsec-auto tunnel
 ```
 
 ## License
