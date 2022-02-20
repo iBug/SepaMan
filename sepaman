@@ -15,7 +15,7 @@ test -r "$DEFAULT_FILE" && . "$DEFAULT_FILE"
 
 # Set metadata
 C_FILENAME=sepaman
-C_VERSION="0.1"
+C_VERSION="0.2"
 C_HOMEPAGE="https://github.com/iBug/SepaMan"
 C_UPDATE_URL="$C_HOMEPAGE/raw/master/$C_FILENAME"
 C_EXE="$(realpath "$0")"
@@ -146,7 +146,7 @@ sm_ifupdown_common() {
     IPSEC_LOCAL="$IF_SEPA_IPSEC_LOCAL"
     IPSEC_REMOTE="$IF_SEPA_IPSEC_REMOTE"
   elif test -n "$IF_SEPA_IPSEC_AUTO"; then
-    local JSON="$(ip -h tunnel show "$IFACE" | jq .[])"
+    local JSON="$(ip -j tunnel show "$IFACE" | jq .[])"
     if test -z "$JSON"; then
       printf "Error: %s is not a tunnel interface.\n" "$IFACE" >&2
       return 1
@@ -200,7 +200,7 @@ sm_ifupdown_common() {
 sm_conf_common() {
   case "$PHASE" in
     post-down)
-      ip link delete "$IFACE" 2>/dev/null;;
+      ip link delete "$IFACE" >/dev/null 2>&1 || true;;
   esac
   sm_ifupdown_common
 }
