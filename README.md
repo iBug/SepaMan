@@ -55,6 +55,9 @@ iface Example inet static
     # The whole interface is ignored by SepaMan if this option is missing.
     sepa-type common # required, only "common" is supported at present
 
+    # If the interface requires a gateway that's different from the default gateway
+    sepa-gateway 192.0.2.0 # optional, set to "none" to disable
+
     # Routing table. Creates routing rules for this table.
     # Used in `ip route add table` and `ip rule add table`
     # It's recommended to omit this option and use the default value,

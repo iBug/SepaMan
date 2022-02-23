@@ -99,6 +99,7 @@ run_main() {
 
 sm_ifupdown_common() {
   local TABLE="$IFACE"
+  local GATEWAY="$IF_GATEWAY"
   local FROMADDR_PRIO="${IF_SEPA_FROMADDR_PRIO:-$SEPA_FROMADDR_PRIORITY}"
   local OIF_PRIO="${IF_SEPA_OIF_PRIO:-$SEPA_OIF_PRIORITY}"
   local FWMARK="$IF_SEPA_FWMARK"
@@ -128,7 +129,12 @@ sm_ifupdown_common() {
       ;;
   esac
 
-  ip "$FAMILY" route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
+  test -z "$GATEWAY" && GATEWAY="$IF_SEPA_GATEWAY"
+  if test -n "$GATEWAY" -a "$GATEWAY" != none; then
+    ip "$FAMILY" route "$ROUTE_ACTION" default via "$GATEWAY" dev "$IFACE" table "$TABLE"
+  else
+    ip "$FAMILY" route "$ROUTE_ACTION" default dev "$IFACE" table "$TABLE"
+  fi
   ip "$FAMILY" rule "$RULE_ACTION" from "$IF_ADDRESS" table "$TABLE" pref "$FROMADDR_PRIO"
   ip "$FAMILY" rule "$RULE_ACTION" from all oif "$IFACE" table "$TABLE" pref "$OIF_PRIO"
   if test -n "$FWMARK"; then
@@ -161,7 +167,7 @@ sm_ifupdown_common() {
       KEYFILE="$KEYDIR/${IPSEC_LOCAL}-${IPSEC_REMOTE}"
     elif test -e "$KEYDIR/${IPSEC_REMOTE}-${IPSEC_LOCAL}"; then
       KEYFILE="$KEYDIR/${IPSEC_REMOTE}-${IPSEC_LOCAL}"
-    elif "$SEPA_IPSEC_KEY_CREATE" = true; then
+    elif test "$SEPA_IPSEC_KEY_CREATE" = true; then
       printf "Creating key file for %s-%s\n" "$IPSEC_LOCAL" "$IPSEC_REMOTE" >&2
       KEYFILE="$KEYDIR/${IPSEC_LOCAL}-${IPSEC_REMOTE}"
       local RAND_FILE=/dev/urandom
